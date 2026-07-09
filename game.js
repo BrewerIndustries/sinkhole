@@ -28,6 +28,7 @@
   // camera / zoom
   const ZOOM_K = 17;        // zoom = ZOOM_K / radius, clamped
   const ZOOM_MAX = 1.5;     // most zoomed-in (tiny hole)
+  const ZOOM_SMOOTH = 0.08; // per-frame easing of zoom toward target (~0.45s)
 
   const canvas = document.getElementById('game');
   const ctx = canvas.getContext('2d');
@@ -64,9 +65,12 @@
     return Math.max(VW / world.w, VH / world.h);
   }
 
-  function computeCamera() {
+  function computeCamera(snap) {
     const p = state.p, world = state.world;
-    const zoom = clamp(ZOOM_K / p.r, fitZoom(world), ZOOM_MAX);
+    const target = clamp(ZOOM_K / p.r, fitZoom(world), ZOOM_MAX);
+    const prev = state.cam ? state.cam.zoom : target;
+    // ease zoom toward target so a growth pop doesn't snap the whole view
+    const zoom = snap ? target : prev + (target - prev) * ZOOM_SMOOTH;
     const halfW = (VW / 2) / zoom, halfH = (VH / 2) / zoom;
     const x = world.w <= 2 * halfW ? world.w / 2 : clamp(p.x, halfW, world.w - halfW);
     const y = world.h <= 2 * halfH ? world.h / 2 : clamp(p.y, halfH, world.h - halfH);
@@ -77,10 +81,20 @@
     const def = LEVELS[i];
     levelIndex = i;
     const world = def.world || { w: VW, h: VH };
-    const objects = def.objects.map((o, idx) => ({
-      x: o.x, y: o.y, r: o.r, tier: o.tier, id: idx,
-      dying: false, dieT: 0, sx: o.x, sy: o.y, sr: o.r,
-    }));
+    const objects = def.objects.map((o, idx) => {
+      const obj = {
+        x: o.x, y: o.y, r: o.r, tier: o.tier, id: idx,
+        dying: false, dieT: 0, sx: o.x, sy: o.y, sr: o.r,
+        move: !!o.move, flee: !!o.flee, speed: o.speed || 1.2, detect: o.detect || 200,
+        vx: 0, vy: 0,
+      };
+      if (obj.move) {
+        const a = Math.random() * Math.PI * 2;
+        const s = obj.flee ? 0 : obj.speed; // fleers start still, dart when threatened
+        obj.vx = Math.cos(a) * s; obj.vy = Math.sin(a) * s;
+      }
+      return obj;
+    });
     state = {
       def, world,
       p: { x: def.player.x, y: def.player.y, r: def.player.r, vx: 0, vy: 0 },
@@ -94,7 +108,7 @@
       tick: 0,
       cam: { x: def.player.x, y: def.player.y, zoom: 1 },
     };
-    computeCamera();
+    computeCamera(true); // snap to correct zoom on level start
     updateHud();
     hideOverlay();
   }
@@ -155,6 +169,18 @@
     return true;
   }
 
+  // moving prey vs wall: push out and reflect velocity (so fleers can be cornered)
+  function bounceRect(o, rect) {
+    const nx = clamp(o.x, rect.x, rect.x + rect.w);
+    const ny = clamp(o.y, rect.y, rect.y + rect.h);
+    const dx = o.x - nx, dy = o.y - ny, d2 = dx * dx + dy * dy;
+    if (d2 >= o.r * o.r || d2 < 0.0001) return;
+    const d = Math.sqrt(d2), nX = dx / d, nY = dy / d;
+    o.x += nX * (o.r - d); o.y += nY * (o.r - d);
+    const vn = o.vx * nX + o.vy * nY;
+    if (vn < 0) { o.vx -= 2 * vn * nX; o.vy -= 2 * vn * nY; }
+  }
+
   function gateSide(g, x, y) {
     if (g.axis === 'v') return x < g.x + g.w / 2 ? -1 : 1;
     return y < g.y + g.h / 2 ? -1 : 1;
@@ -197,6 +223,22 @@
 
     p.x = clamp(p.x, p.r, world.w - p.r);
     p.y = clamp(p.y, p.r, world.h - p.r);
+
+    // moving prey: wander, or flee once the hole is big enough to eat them
+    for (const o of state.objects) {
+      if (!o.move || o.dying) continue;
+      if (o.flee) {
+        const dx = o.x - p.x, dy = o.y - p.y, d = Math.hypot(dx, dy) || 1;
+        if (d < o.detect && p.r >= o.r * EAT_TOL) { o.vx = (dx / d) * o.speed; o.vy = (dy / d) * o.speed; }
+        else { o.vx *= 0.96; o.vy *= 0.96; }
+      }
+      o.x += o.vx; o.y += o.vy;
+      if (o.x < o.r) { o.x = o.r; o.vx = Math.abs(o.vx); }
+      else if (o.x > world.w - o.r) { o.x = world.w - o.r; o.vx = -Math.abs(o.vx); }
+      if (o.y < o.r) { o.y = o.r; o.vy = Math.abs(o.vy); }
+      else if (o.y > world.h - o.r) { o.y = world.h - o.r; o.vy = -Math.abs(o.vy); }
+      for (const wall of state.walls) bounceRect(o, wall);
+    }
 
     // eating
     for (const o of state.objects) {

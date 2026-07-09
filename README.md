@@ -9,9 +9,13 @@ them to win.
 ## The feel
 
 - The world is **much bigger than the screen**. A camera follows the hole and
-  **zooms out as you grow**: tiny = zoomed in, hunting locally with limited sight;
-  big = zoomed out, surveying the whole field. That arc *is* the strategy — search
-  and route efficiency in a space you can't see all at once.
+  **zooms out as you grow** (eased smoothly, so a growth pop doesn't snap the view):
+  tiny = zoomed in, hunting locally with limited sight; big = zoomed out, surveying
+  the whole field. That arc *is* the strategy — search and route efficiency in a
+  space you can't see all at once.
+- Some prey **move**: *wanderers* drift around (you can't just park on a pocket),
+  and *fleers* dart away the instant you're big enough to eat them — corner them
+  against walls/edges, or ambush them while you're still too small to spook them.
 - Most objects are inedible clutter. **Edible prey pulses with a white ring** so it
   pops out of the noise. You can only swallow objects at or below your own size.
 - A **minimap** (bottom-right) shows the world bounds, your position, the gold
@@ -43,8 +47,11 @@ them to win.
 3. **Fork in the Field** — the trail splits; only one branch keeps feeding you.
 4. **Islands** — walls carve four rooms (one tier each); take them in the right order.
 5. **The Long Hunt** — huge sparse field; plan a route across the corner pockets.
+6. **Live Bait** — edible prey wander; you have to chase the drifting food.
+7. **Spooked** — prey flee once you can eat them; corner them in the wall pens.
+8. **Feeding Frenzy** — the big combined hunt: wanderers + pockets + clutter, 3 golds.
 
-All five are verified size-solvable (a greedy "eat smallest edible, grow, repeat"
+All eight are verified size-solvable (a greedy "eat smallest edible, grow, repeat"
 solver reaches every gold). Wrong choices are costly backtracks / dead-end bait, not
 locked wins — so no hard seal-gates until stuck-detection is reachability-aware.
 
@@ -54,8 +61,9 @@ locked wins — so no hard seal-gates until stuck-detection is reachability-awar
 - `game.js` — engine: input, movement, **world + follow-camera + size-zoom**,
   circle/rect + one-way-gate collision, eating, growth, win/stuck, rendering,
   minimap.
-- `levels.js` — level data + `cluster()` / `scatter()` / `goal()` helpers.
-  Levels declare a `world: {w,h}`. Add levels here.
+- `levels.js` — level data + helpers: `cluster()` / `scatter()` / `goal()`, plus
+  `moving()` (wandering prey) and `fleeing()` (prey that flee when edible). Levels
+  declare a `world: {w,h}`. Add levels here.
 
 ## Play / deploy
 
@@ -80,9 +88,9 @@ python3 -m http.server 4600
 
 ## Status
 
-v1 — deployed to the dev Pages site. 5 hand-tuned field levels (1 sandbox +
-4 designed), abstract shapes. Core loop, camera/zoom, dense-field hunting, and
-per-level solvability all verified. No enemies/hazards yet.
+v1 — deployed to the dev Pages site. 8 hand-tuned field levels (1 sandbox +
+7 designed), abstract shapes. Core loop, eased camera/zoom, dense-field hunting,
+moving/fleeing prey, and per-level solvability all verified.
 
 ## Known rough edges
 
