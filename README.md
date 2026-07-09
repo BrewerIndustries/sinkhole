@@ -57,6 +57,19 @@ locked wins — so no hard seal-gates until stuck-detection is reachability-awar
 - `levels.js` — level data + `cluster()` / `scatter()` / `goal()` helpers.
   Levels declare a `world: {w,h}`. Add levels here.
 
+## Play / deploy
+
+- **Dev:** https://brewerindustries.github.io/sinkhole/dev/ (deploys on push to `dev`)
+- **Prod:** https://brewerindustries.github.io/sinkhole/ (`main`)
+
+Repo: `BrewerIndustries/sinkhole` (public). The `.github/workflows/pages.yml` Action
+lives on `dev` and publishes `main`→`/` and `dev`→`/dev/`. Promote to prod via a PR
+into `main` (never fast-forward/reset-push), then re-run the workflow.
+
+> Custom domain `sinkhole.dabrewer.dev` + dashboard/launcher hookup are a follow-up
+> (needs the Cloudflare DNS record). Restore the `CNAME` line in `pages.yml` once DNS
+> exists. `.jarvis.json` already carries the intended URLs.
+
 ## Run locally
 
 ```
@@ -67,9 +80,9 @@ python3 -m http.server 4600
 
 ## Status
 
-v1 prototype — 5 hand-tuned field levels (1 sandbox + 4 designed), abstract shapes.
-Core loop, camera/zoom, dense-field hunting, and per-level solvability all verified.
-No enemies/hazards yet. Not yet deployed to GitHub Pages.
+v1 — deployed to the dev Pages site. 5 hand-tuned field levels (1 sandbox +
+4 designed), abstract shapes. Core loop, camera/zoom, dense-field hunting, and
+per-level solvability all verified. No enemies/hazards yet.
 
 ## Known rough edges
 
