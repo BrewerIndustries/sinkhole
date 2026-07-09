@@ -59,16 +59,16 @@ locked wins — so no hard seal-gates until stuck-detection is reachability-awar
 
 ## Play / deploy
 
-- **Dev:** https://brewerindustries.github.io/sinkhole/dev/ (deploys on push to `dev`)
-- **Prod:** https://brewerindustries.github.io/sinkhole/ (`main`)
+- **Dev:** https://sinkhole.dabrewer.dev/dev/ (deploys on push to `dev`)
+- **Prod:** https://sinkhole.dabrewer.dev/ (`main`)
 
 Repo: `BrewerIndustries/sinkhole` (public). The `.github/workflows/pages.yml` Action
-lives on `dev` and publishes `main`→`/` and `dev`→`/dev/`. Promote to prod via a PR
-into `main` (never fast-forward/reset-push), then re-run the workflow.
+lives on `dev` and publishes `main`→`/` and `dev`→`/dev/`, writing the
+`sinkhole.dabrewer.dev` CNAME. Promote to prod via a PR into `main` (never
+fast-forward/reset-push), then re-run the workflow.
 
-> Custom domain `sinkhole.dabrewer.dev` + dashboard/launcher hookup are a follow-up
-> (needs the Cloudflare DNS record). Restore the `CNAME` line in `pages.yml` once DNS
-> exists. `.jarvis.json` already carries the intended URLs.
+> Still a follow-up: dashboard/launcher hookup (`sync-registry.mjs` + launcher
+> `apps.ts`). `.jarvis.json` already carries the URLs.
 
 ## Run locally
 
