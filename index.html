@@ -1,0 +1,65 @@
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
+<title>Sinkhole</title>
+<style>
+  :root { --bg: #0b0e16; --panel: #151b2b; --ink: #e7ecf7; --muted: #8b97b4; --accent: #facc15; }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; background: var(--bg); color: var(--ink);
+    font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif; }
+  #wrap { max-width: 980px; margin: 0 auto; padding: 14px; }
+  header { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; margin-bottom: 10px; }
+  header h1 { font-size: 20px; margin: 0; letter-spacing: 2px; }
+  header .tag { color: var(--muted); font-size: 12px; }
+  #stage { position: relative; }
+  canvas { width: 100%; height: auto; display: block; border-radius: 12px;
+    background: #0f1420; box-shadow: 0 10px 40px rgba(0,0,0,0.5); touch-action: none; }
+  #hud { display: flex; flex-wrap: wrap; gap: 8px 16px; align-items: center; margin: 10px 2px; font-size: 13px; }
+  #hud .chip { background: var(--panel); padding: 5px 10px; border-radius: 999px; color: var(--ink); }
+  #hud .chip b { color: var(--accent); font-weight: 600; }
+  #hint { color: var(--muted); font-size: 13px; flex: 1 1 100%; margin-top: 2px; }
+  #bar { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 6px; }
+  button, select { background: var(--panel); color: var(--ink); border: 1px solid #26304a;
+    padding: 7px 12px; border-radius: 8px; font-size: 13px; cursor: pointer; }
+  button:hover { border-color: var(--accent); }
+  #overlay { position: absolute; inset: 0; display: none; align-items: center; justify-content: center;
+    background: rgba(8,11,18,0.72); border-radius: 12px; text-align: center; }
+  #overlay.show { display: flex; }
+  #overlay .box h2 { margin: 0 0 6px; font-size: 26px; }
+  #overlay .box p { margin: 0 0 16px; color: var(--muted); }
+  #overlay-btn { background: var(--accent); color: #241d00; font-weight: 600; border: none; padding: 10px 20px; }
+</style>
+
+<div id="wrap">
+  <header>
+    <h1>S I N K H O L E</h1>
+    <span class="tag">move your mouse (or WASD) — hunt the small ones, grow, take the gold</span>
+  </header>
+
+  <div id="stage">
+    <canvas id="game"></canvas>
+    <div id="overlay">
+      <div class="box">
+        <h2 id="overlay-title">Level Complete</h2>
+        <p id="overlay-sub"></p>
+        <button id="overlay-btn">Next</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="hud">
+    <span class="chip"><b id="hud-level"></b></span>
+    <span class="chip">🟡 <b id="hud-goals"></b></span>
+    <span class="chip">⬤ <b id="hud-size"></b></span>
+    <span id="hint"><span id="hud-hint"></span></span>
+  </div>
+
+  <div id="bar">
+    <button id="btn-restart">↻ Restart</button>
+    <button id="btn-prev">◀ Prev</button>
+    <button id="btn-next">Next ▶</button>
+    <select id="level-select" aria-label="Select level"></select>
+  </div>
+</div>
+
+<script src="levels.js"></script>
+<script src="game.js"></script>

@@ -1,0 +1,12 @@
+{
+  "id": "sinkhole",
+  "name": "Sinkhole",
+  "description": "A strategy take on hole.io — steer a hole through a large field packed with objects too big to eat, hunt the ones small enough to swallow, grow, and track down the gold. Camera zooms out as you grow; hand-designed puzzle levels.",
+  "category": "games",
+  "tech": ["Vanilla JS", "HTML5 Canvas", "static site", "GitHub Pages"],
+  "status": { "prod": "in_progress", "dev": "live" },
+  "deploy": {
+    "prod": { "url": "https://sinkhole.dabrewer.dev/" },
+    "dev": { "url": "https://sinkhole.dabrewer.dev/dev/" }
+  }
+}

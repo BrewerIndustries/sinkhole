@@ -1,0 +1,54 @@
+name: Deploy to GitHub Pages
+
+# Publishes BOTH versions to one Pages site:
+#   main -> /        (prod)   https://brewerindustries.github.io/sinkhole/
+#   dev  -> /dev/    (dev)    https://brewerindustries.github.io/sinkhole/dev/
+# Lives on the dev branch only; it checks out both branches itself. Pushing to
+# main does not auto-redeploy — re-run via "Run workflow" or push to dev.
+#
+# NOTE: no CNAME yet — running on the native github.io URL for now. When the
+# sinkhole.dabrewer.dev DNS record is added, restore the CNAME line below and the
+# dashboard/launcher hookup (see NEW-PROJECT.md).
+
+on:
+  push:
+    branches: [dev]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Checkout main (prod) into site root
+        uses: actions/checkout@v4
+        with:
+          ref: main
+          path: _site
+      - name: Checkout dev into /dev
+        uses: actions/checkout@v4
+        with:
+          ref: dev
+          path: _site/dev
+      - name: Strip git/CI dirs
+        run: |
+          rm -rf _site/.git _site/.github _site/dev/.git _site/dev/.github
+          # echo "sinkhole.dabrewer.dev" > _site/CNAME   # restore once DNS exists
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: _site
+      - name: Deploy to Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
