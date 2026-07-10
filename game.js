@@ -22,7 +22,7 @@
 
   // movement tuning (gentler = less jerky)
   const FRICTION = 0.89;    // higher = more glide, softer direction changes
-  const APPARENT_SPEED = 3.1; // base ON-SCREEN speed for the smallest hole
+  const APPARENT_SPEED = 1.8; // base ON-SCREEN speed for the smallest hole
   const SIZE_POW = 0.45;    // how strongly apparent speed grows with radius (0 = flat)
   const SIZE_MAX = 2.1;     // cap on the size boost (biggest hole ≈ this× the base)
   const WORLD_CAP = 16;     // hard cap on world px/frame (protects huge/zoomed-out)
