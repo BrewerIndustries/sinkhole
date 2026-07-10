@@ -20,15 +20,17 @@
     5: '#fcd34d', // gold (goal)
   };
 
-  // movement tuning
-  const ACCEL = 0.62;
-  const FRICTION = 0.86;
+  // movement tuning (gentler = less jerky)
+  const ACCEL = 0.40;       // steer acceleration toward the pointer
+  const FRICTION = 0.89;    // higher = more glide, softer direction changes
+  const MAX_SPEED = 3.6;    // top speed for a small hole (scales down as you grow)
   const GROWTH = 0.5;       // fraction of an eaten object's area added to yours
   const EAT_TOL = 0.9;      // must be this fraction as big to swallow (r >= obj.r*TOL)
-  // camera / zoom
+  // camera / zoom (eased on both position and zoom so the view glides)
   const ZOOM_K = 17;        // zoom = ZOOM_K / radius, clamped
   const ZOOM_MAX = 1.5;     // most zoomed-in (tiny hole)
-  const ZOOM_SMOOTH = 0.08; // per-frame easing of zoom toward target (~0.45s)
+  const ZOOM_SMOOTH = 0.045; // per-frame easing of zoom toward target (slower)
+  const CAM_SMOOTH = 0.10;  // per-frame easing of camera center toward the hole
 
   const canvas = document.getElementById('game');
   const ctx = canvas.getContext('2d');
@@ -72,8 +74,13 @@
     // ease zoom toward target so a growth pop doesn't snap the whole view
     const zoom = snap ? target : prev + (target - prev) * ZOOM_SMOOTH;
     const halfW = (VW / 2) / zoom, halfH = (VH / 2) / zoom;
-    const x = world.w <= 2 * halfW ? world.w / 2 : clamp(p.x, halfW, world.w - halfW);
-    const y = world.h <= 2 * halfH ? world.h / 2 : clamp(p.y, halfH, world.h - halfH);
+    const tx = world.w <= 2 * halfW ? world.w / 2 : clamp(p.x, halfW, world.w - halfW);
+    const ty = world.h <= 2 * halfH ? world.h / 2 : clamp(p.y, halfH, world.h - halfH);
+    // ease the camera center toward the hole instead of snapping to it
+    const px = state.cam ? state.cam.x : tx;
+    const py = state.cam ? state.cam.y : ty;
+    const x = snap ? tx : px + (tx - px) * CAM_SMOOTH;
+    const y = snap ? ty : py + (ty - py) * CAM_SMOOTH;
     state.cam = { x, y, zoom };
   }
 
@@ -206,7 +213,7 @@
     if (keys.has('arrowdown') || keys.has('s')) p.vy += ACCEL;
 
     p.vx *= FRICTION; p.vy *= FRICTION;
-    const maxSpeed = 5.4 * (1 - Math.min(0.42, (p.r - 12) / 260));
+    const maxSpeed = MAX_SPEED * (1 - Math.min(0.42, (p.r - 12) / 260));
     const sp = Math.hypot(p.vx, p.vy);
     if (sp > maxSpeed) { p.vx *= maxSpeed / sp; p.vy *= maxSpeed / sp; }
     p.x += p.vx; p.y += p.vy;
