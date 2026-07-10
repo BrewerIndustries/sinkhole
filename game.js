@@ -21,9 +21,9 @@
   };
 
   // movement tuning (gentler = less jerky)
-  const ACCEL = 0.40;       // steer acceleration toward the pointer
+  const ACCEL = 0.30;       // steer acceleration toward the pointer
   const FRICTION = 0.89;    // higher = more glide, softer direction changes
-  const MAX_SPEED = 3.6;    // top speed for a small hole (scales down as you grow)
+  const MAX_SPEED = 2.6;    // top speed for a small hole (scales down as you grow)
   const GROWTH = 0.5;       // fraction of an eaten object's area added to yours
   const EAT_TOL = 0.9;      // must be this fraction as big to swallow (r >= obj.r*TOL)
   // camera / zoom (eased on both position and zoom so the view glides)
@@ -147,7 +147,16 @@
     e.preventDefault(); const p = screenPos(e); pointer.x = p.x; pointer.y = p.y; pointer.active = true;
   }, { passive: false });
   canvas.addEventListener('touchend', () => { pointer.active = false; });
-  window.addEventListener('keydown', (e) => keys.add(e.key.toLowerCase()));
+  window.addEventListener('keydown', (e) => {
+    const k = e.key.toLowerCase();
+    // Enter / Space activates the overlay button (Next Level / Retry) when prompted
+    if ((k === 'enter' || k === ' ' || k === 'spacebar') && overlay.classList.contains('show')) {
+      e.preventDefault();
+      overlayBtn.click();
+      return;
+    }
+    keys.add(k);
+  });
   window.addEventListener('keyup', (e) => keys.delete(e.key.toLowerCase()));
 
   // ---- geometry helpers ----

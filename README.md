@@ -101,6 +101,12 @@ moving/fleeing prey, and per-level solvability all verified.
 
 ## Ideas / backlog
 
+- **Spawning shapes (new objective types).** Shapes spawn over time, enabling:
+  - *Clear-the-field under pressure* — you must eat faster than things spawn.
+  - *Quota with waiting* — "eat N of shape X"; some may only appear via spawns, so
+    you loiter/hunt for them to pop in. Adds pacing + patience to the hunt.
+  Needs a spawner (rate, spawn tiers, spawn points/edges) and win conditions keyed on
+  eaten-counts-by-tier or field-empty rather than just golds.
 - Hand-curated food trails / guaranteed-solvable field generation.
 - Reachability-aware stuck detection.
 - v2: moving hazards / shrinkers, rival holes.
