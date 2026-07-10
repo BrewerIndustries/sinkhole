@@ -21,9 +21,9 @@
   };
 
   // movement tuning (gentler = less jerky)
-  const ACCEL = 0.30;       // steer acceleration toward the pointer
   const FRICTION = 0.89;    // higher = more glide, softer direction changes
-  const MAX_SPEED = 2.6;    // top speed for a small hole (scales down as you grow)
+  const APPARENT_SPEED = 3.3; // target ON-SCREEN speed; world speed compensates for zoom
+  const ACCEL_RESP = 2.0;   // how hard the hole accelerates toward its top speed (capped)
   const GROWTH = 0.5;       // fraction of an eaten object's area added to yours
   const EAT_TOL = 0.9;      // must be this fraction as big to swallow (r >= obj.r*TOL)
   // camera / zoom (eased on both position and zoom so the view glides)
@@ -209,22 +209,26 @@
     const p = state.p, world = state.world, cam = state.cam;
 
     // steer toward pointer, mapped from screen space through the camera
+    // On-screen speed stays ~constant regardless of size: world speed rises as the
+    // camera zooms out, so a big hole doesn't crawl and a small one doesn't dart.
+    const spd = clamp(APPARENT_SPEED / cam.zoom, 1.6, 8);
+    const accel = spd * (1 - FRICTION) * ACCEL_RESP;
+
     if (pointer.active) {
       const wx = (pointer.x - VW / 2) / cam.zoom + cam.x;
       const wy = (pointer.y - VH / 2) / cam.zoom + cam.y;
       const dx = wx - p.x, dy = wy - p.y;
       const d = Math.hypot(dx, dy);
-      if (d > 3) { p.vx += (dx / d) * ACCEL; p.vy += (dy / d) * ACCEL; }
+      if (d > 3) { p.vx += (dx / d) * accel; p.vy += (dy / d) * accel; }
     }
-    if (keys.has('arrowleft') || keys.has('a')) p.vx -= ACCEL;
-    if (keys.has('arrowright') || keys.has('d')) p.vx += ACCEL;
-    if (keys.has('arrowup') || keys.has('w')) p.vy -= ACCEL;
-    if (keys.has('arrowdown') || keys.has('s')) p.vy += ACCEL;
+    if (keys.has('arrowleft') || keys.has('a')) p.vx -= accel;
+    if (keys.has('arrowright') || keys.has('d')) p.vx += accel;
+    if (keys.has('arrowup') || keys.has('w')) p.vy -= accel;
+    if (keys.has('arrowdown') || keys.has('s')) p.vy += accel;
 
     p.vx *= FRICTION; p.vy *= FRICTION;
-    const maxSpeed = MAX_SPEED * (1 - Math.min(0.42, (p.r - 12) / 260));
     const sp = Math.hypot(p.vx, p.vy);
-    if (sp > maxSpeed) { p.vx *= maxSpeed / sp; p.vy *= maxSpeed / sp; }
+    if (sp > spd) { p.vx *= spd / sp; p.vy *= spd / sp; }
     p.x += p.vx; p.y += p.vy;
 
     // one-way gate sealing
