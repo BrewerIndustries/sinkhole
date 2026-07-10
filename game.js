@@ -22,7 +22,10 @@
 
   // movement tuning (gentler = less jerky)
   const FRICTION = 0.89;    // higher = more glide, softer direction changes
-  const APPARENT_SPEED = 3.3; // target ON-SCREEN speed; world speed compensates for zoom
+  const APPARENT_SPEED = 3.1; // base ON-SCREEN speed for the smallest hole
+  const SIZE_POW = 0.45;    // how strongly apparent speed grows with radius (0 = flat)
+  const SIZE_MAX = 2.1;     // cap on the size boost (biggest hole ≈ this× the base)
+  const WORLD_CAP = 16;     // hard cap on world px/frame (protects huge/zoomed-out)
   const ACCEL_RESP = 2.0;   // how hard the hole accelerates toward its top speed (capped)
   const GROWTH = 0.5;       // fraction of an eaten object's area added to yours
   const EAT_TOL = 0.9;      // must be this fraction as big to swallow (r >= obj.r*TOL)
@@ -209,9 +212,10 @@
     const p = state.p, world = state.world, cam = state.cam;
 
     // steer toward pointer, mapped from screen space through the camera
-    // On-screen speed stays ~constant regardless of size: world speed rises as the
-    // camera zooms out, so a big hole doesn't crawl and a small one doesn't dart.
-    const spd = clamp(APPARENT_SPEED / cam.zoom, 1.6, 8);
+    // Apparent (on-screen) speed grows with size so a big hole feels powerful, not
+    // sluggish; world speed then compensates for the camera zoom-out.
+    const sizeBoost = clamp(Math.pow(p.r / 12, SIZE_POW), 1, SIZE_MAX);
+    const spd = Math.min(APPARENT_SPEED * sizeBoost / cam.zoom, WORLD_CAP);
     const accel = spd * (1 - FRICTION) * ACCEL_RESP;
 
     if (pointer.active) {
