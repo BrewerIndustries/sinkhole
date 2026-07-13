@@ -16,6 +16,9 @@ them to win.
 - Some prey **move**: *wanderers* drift around (you can't just park on a pocket),
   and *fleers* dart away the instant you're big enough to eat them — corner them
   against walls/edges, or ambush them while you're still too small to spook them.
+- **Objectives** come in two flavors (inspired by hole.io 3D / Hole 'Em All):
+  *eat all the gold orbs*, or **collect N of specific shapes** (▲ ■ ★ ⬢ …). The HUD
+  tracks each shape's count and the minimap marks the remaining targets.
 - Most objects are inedible clutter. **Edible prey pulses with a white ring** so it
   pops out of the noise. You can only swallow objects at or below your own size.
 - A **minimap** (bottom-right) shows the world bounds, your position, the gold
@@ -50,10 +53,28 @@ them to win.
 6. **Live Bait** — edible prey wander; you have to chase the drifting food.
 7. **Spooked** — prey flee once you can eat them; corner them in the wall pens.
 8. **Feeding Frenzy** — the big combined hunt: wanderers + pockets + clutter, 3 golds.
+9. **Collector** — first shape-collect goal: bag 5 ▲ and 4 ■ among the clutter.
+10. **Big Game** — grow all the way up, then collect the big ★ and ⬢.
 
-All eight are verified size-solvable (a greedy "eat smallest edible, grow, repeat"
-solver reaches every gold). Wrong choices are costly backtracks / dead-end bait, not
-locked wins — so no hard seal-gates until stuck-detection is reachability-aware.
+All ten are verified solvable (a greedy "eat smallest edible, grow, repeat" solver
+reaches every gold / every target shape). Wrong choices are costly backtracks /
+dead-end bait, not locked wins — so no hard seal-gates until stuck-detection is
+reachability-aware.
+
+### Objective schema
+
+A level either uses the default gold-orb goal (tier-5 `goal()` objects) or declares a
+shape-collect objective:
+
+```js
+objective: { collect: [
+  { shape: 'triangle', count: 5, color: '#f472b6' },
+  { shape: 'square',   count: 4, color: '#38bdf8' },
+]}
+```
+
+Target objects are placed with `mark(cluster(...), shape, color)`. Shapes: `circle`
+(default/clutter), `triangle`, `square`, `diamond`, `pentagon`, `hexagon`, `star`.
 
 ## Files
 
@@ -88,9 +109,9 @@ python3 -m http.server 4600
 
 ## Status
 
-v1 — deployed to the dev Pages site. 8 hand-tuned field levels (1 sandbox +
-7 designed), abstract shapes. Core loop, eased camera/zoom, dense-field hunting,
-moving/fleeing prey, and per-level solvability all verified.
+v1 — deployed to the dev Pages site. 10 hand-tuned field levels (1 sandbox +
+9 designed). Core loop, eased camera/zoom (size-scaled speed), dense-field hunting,
+moving/fleeing prey, and two objective types (gold orbs + shape-collect) all verified.
 
 ## Known rough edges
 

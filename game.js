@@ -19,6 +19,11 @@
     4: '#fca5a5', // red
     5: '#fcd34d', // gold (goal)
   };
+  // glyphs for shape-collect objectives (HUD)
+  const SHAPE_GLYPH = {
+    circle: '●', triangle: '▲', square: '■', diamond: '◆',
+    star: '★', pentagon: '⬟', hexagon: '⬢',
+  };
 
   // movement tuning (gentler = less jerky)
   const FRICTION = 0.89;    // higher = more glide, softer direction changes
@@ -94,6 +99,7 @@
     const objects = def.objects.map((o, idx) => {
       const obj = {
         x: o.x, y: o.y, r: o.r, tier: o.tier, id: idx,
+        shape: o.shape || 'circle', color: o.color || null,
         dying: false, dieT: 0, sx: o.x, sy: o.y, sr: o.r,
         move: !!o.move, flee: !!o.flee, speed: o.speed || 1.2, detect: o.detect || 200,
         vx: 0, vy: 0,
@@ -113,6 +119,10 @@
       objects,
       goalsTotal: objects.filter((o) => o.tier === 5).length,
       goalsEaten: 0,
+      // shape-collect objective (null = classic "eat all the gold orbs")
+      collect: def.objective && def.objective.collect
+        ? def.objective.collect.map((c) => ({ ...c, got: 0 }))
+        : null,
       status: 'play', // play | win | stuck
       pop: [],
       tick: 0,
@@ -125,7 +135,13 @@
 
   function updateHud() {
     hudLevel.textContent = `${levelIndex + 1}. ${state.def.name}`;
-    hudGoals.textContent = `Gold ${state.goalsEaten}/${state.goalsTotal}`;
+    if (state.collect) {
+      hudGoals.innerHTML = state.collect.map((c) =>
+        `<b style="color:${c.color || '#fcd34d'}">${SHAPE_GLYPH[c.shape] || '●'} ${c.got}/${c.count}</b>`
+      ).join(' &nbsp; ');
+    } else {
+      hudGoals.innerHTML = `🟡 <b>Gold ${state.goalsEaten}/${state.goalsTotal}</b>`;
+    }
     hudSize.textContent = `Tier ${tierOfRadius(state.p.r)}`;
     hudHint.textContent = state.def.hint;
   }
@@ -274,7 +290,11 @@
         const area = Math.PI * o.r * o.r;
         p.r = Math.sqrt((Math.PI * p.r * p.r + area * GROWTH) / Math.PI);
         if (o.tier === 5) state.goalsEaten++;
-        state.pop.push({ x: o.x, y: o.y, r: o.r, t: 0, tier: o.tier });
+        if (state.collect && o.shape && o.shape !== 'circle') {
+          const t = state.collect.find((c) => c.shape === o.shape);
+          if (t && t.got < t.count) t.got++;
+        }
+        state.pop.push({ x: o.x, y: o.y, r: o.r, t: 0, color: o.color || TIER_COLOR[o.tier] });
         updateHud();
       }
     }
@@ -294,7 +314,10 @@
     computeCamera();
 
     // win / stuck
-    if (state.goalsEaten >= state.goalsTotal) {
+    const won = state.collect
+      ? state.collect.every((c) => c.got >= c.count)
+      : state.goalsEaten >= state.goalsTotal;
+    if (won) {
       state.status = 'win';
       const more = levelIndex + 1 < LEVELS.length;
       showOverlay('Level Complete', more ? 'Nice hunting.' : 'You cleared them all.',
@@ -345,13 +368,13 @@
 
     for (const o of state.objects) {
       const edible = state.p.r >= o.r * EAT_TOL && !o.dying;
-      drawBlob(o.x, o.y, o.r, o.tier, edible, cam.zoom);
+      drawObject(o, edible, cam.zoom);
     }
 
     for (const f of state.pop) {
       const k = f.t / 0.35;
       ctx.globalAlpha = 1 - k;
-      ctx.strokeStyle = TIER_COLOR[f.tier];
+      ctx.strokeStyle = f.color || '#fff';
       ctx.lineWidth = 2 / cam.zoom;
       ctx.beginPath(); ctx.arc(f.x, f.y, f.r + k * 22, 0, Math.PI * 2); ctx.stroke();
       ctx.globalAlpha = 1;
@@ -371,19 +394,50 @@
     drawMinimap();
   }
 
-  function drawBlob(x, y, r, tier, edible, zoom) {
+  function shapePath(shape, x, y, r) {
+    ctx.beginPath();
+    switch (shape) {
+      case 'square': { const s = r * 0.86; ctx.rect(x - s, y - s, 2 * s, 2 * s); break; }
+      case 'triangle': polyPath(x, y, r * 1.1, 3, -Math.PI / 2); break;
+      case 'diamond': polyPath(x, y, r, 4, -Math.PI / 2); break;
+      case 'pentagon': polyPath(x, y, r, 5, -Math.PI / 2); break;
+      case 'hexagon': polyPath(x, y, r, 6, -Math.PI / 2); break;
+      case 'star': starPath(x, y, r, r * 0.45, 5, -Math.PI / 2); break;
+      default: ctx.arc(x, y, r, 0, Math.PI * 2); // circle
+    }
+  }
+  function polyPath(x, y, r, n, rot) {
+    for (let i = 0; i < n; i++) {
+      const a = rot + i * 2 * Math.PI / n, px = x + Math.cos(a) * r, py = y + Math.sin(a) * r;
+      i ? ctx.lineTo(px, py) : ctx.moveTo(px, py);
+    }
+    ctx.closePath();
+  }
+  function starPath(x, y, R, r, n, rot) {
+    for (let i = 0; i < 2 * n; i++) {
+      const a = rot + i * Math.PI / n, rr = i % 2 ? r : R;
+      const px = x + Math.cos(a) * rr, py = y + Math.sin(a) * rr;
+      i ? ctx.lineTo(px, py) : ctx.moveTo(px, py);
+    }
+    ctx.closePath();
+  }
+
+  function drawObject(o, edible, zoom) {
+    const color = o.color || TIER_COLOR[o.tier];
+    const isTarget = o.tier === 5 || (o.shape && o.shape !== 'circle');
     ctx.save();
-    if (tier === 5) { ctx.shadowColor = '#fcd34d'; ctx.shadowBlur = 16; }
-    ctx.fillStyle = TIER_COLOR[tier];
+    if (isTarget) { ctx.shadowColor = color; ctx.shadowBlur = 14; }
+    ctx.fillStyle = color;
     ctx.globalAlpha = edible ? 1 : 0.5;
-    ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI * 2); ctx.fill();
+    shapePath(o.shape || 'circle', o.x, o.y, o.r);
+    ctx.fill();
     ctx.restore();
     if (edible) {
-      // pulsing ring so edible prey pops out of a dense field
-      const pulse = 1 + 0.18 * Math.sin(state.tick * 0.15 + x * 0.05);
+      // pulsing ring so edible prey/targets pop out of a dense field
+      const pulse = 1 + 0.18 * Math.sin(state.tick * 0.15 + o.x * 0.05);
       ctx.strokeStyle = 'rgba(255,255,255,0.9)';
       ctx.lineWidth = 1.6 / zoom;
-      ctx.beginPath(); ctx.arc(x, y, r + 2 + pulse, 0, Math.PI * 2); ctx.stroke();
+      ctx.beginPath(); ctx.arc(o.x, o.y, o.r + 2 + pulse, 0, Math.PI * 2); ctx.stroke();
     }
   }
 
@@ -396,10 +450,12 @@
     ctx.fillStyle = '#0b0e16'; roundRect(ox, oy, mw, mh, 6); ctx.fill();
     ctx.strokeStyle = 'rgba(140,170,255,0.35)'; ctx.lineWidth = 1; ctx.stroke();
     const sx = mw / world.w, sy = mh / world.h;
-    // goals
+    // objective markers: gold orbs, or the collect-target shapes
+    const targetShapes = state.collect ? state.collect.map((c) => c.shape) : null;
     for (const o of state.objects) {
-      if (o.tier !== 5) continue;
-      ctx.fillStyle = '#fcd34d';
+      const isTarget = targetShapes ? targetShapes.includes(o.shape) : o.tier === 5;
+      if (!isTarget) continue;
+      ctx.fillStyle = o.color || '#fcd34d';
       ctx.beginPath(); ctx.arc(ox + o.x * sx, oy + o.y * sy, 3, 0, Math.PI * 2); ctx.fill();
     }
     // hole
@@ -457,5 +513,5 @@
   requestAnimationFrame(frame);
 
   // debug hook (headless testing only; harmless in normal play)
-  window.__dbg = { get state() { return state; }, step, loadLevel };
+  window.__dbg = { get state() { return state; }, step, loadLevel, draw };
 })();

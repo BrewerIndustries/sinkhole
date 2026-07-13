@@ -66,6 +66,10 @@ function scatter(world, count, tier, seed, avoid, keepOut) {
   return out;
 }
 
+// give objects a shape + color (for shape-collect objectives). Non-marked objects
+// stay plain circles / tier colors.
+function mark(objs, shape, color) { return objs.map((o) => ({ ...o, shape, color })); }
+
 // wrap objects so they wander (constant drift, bounce off edges/walls)
 function moving(objs, speed) { return objs.map((o) => ({ ...o, move: true, speed: speed || 1.2 })); }
 
@@ -269,6 +273,62 @@ const LEVELS = [
         goal(150, 800), goal(2250, 800), goal(1200, 1480),
         ...scatter(world, 58, 4, 808, spawn, 150),
         ...scatter(world, 20, 3, 809, spawn, 150),
+      ];
+    })(),
+  },
+
+  // 9 — COLLECTOR: the new objective type. Instead of gold orbs, the goal is to
+  // collect a set number of specific SHAPES (▲ and ■). Grow on the circles, then
+  // hunt down the shapes among the clutter.
+  {
+    name: 'Collector',
+    hint: 'New goal: collect the shapes. Grow on the circles, then hunt the ▲ and ■.',
+    world: { w: 2000, h: 1400 },
+    player: { x: 1000, y: 700, r: 12 },
+    objective: {
+      collect: [
+        { shape: 'triangle', count: 5, color: '#f472b6' },
+        { shape: 'square', count: 4, color: '#38bdf8' },
+      ],
+    },
+    objects: (() => {
+      const world = { w: 2000, h: 1400 }, spawn = [{ x: 1000, y: 700 }];
+      return [
+        ...cluster(1000, 700, 10, 1, 120, 901), // grow to tier 2
+        ...cluster(520, 430, 8, 2, 110, 902),   // grow to tier 3
+        ...cluster(1500, 1000, 7, 3, 110, 903), // top-up
+        // targets: 5 pink triangles (tier 2) + 4 blue squares (tier 3)
+        ...mark(cluster(430, 1050, 5, 2, 150, 904), 'triangle', '#f472b6'),
+        ...mark(cluster(1600, 400, 4, 3, 140, 905), 'square', '#38bdf8'),
+        ...scatter(world, 26, 4, 906, spawn, 140), // clutter
+      ];
+    })(),
+  },
+
+  // 10 — BIG GAME: a shape hunt that needs you fully grown. Bag the big ★ and ⬢,
+  // which only become edible once you've climbed the whole food chain.
+  {
+    name: 'Big Game',
+    hint: 'Grow all the way up the circles, then bag the big shapes: ★ and ⬢.',
+    world: { w: 2200, h: 1500 },
+    player: { x: 1100, y: 750, r: 12 },
+    objective: {
+      collect: [
+        { shape: 'star', count: 3, color: '#fbbf24' },
+        { shape: 'hexagon', count: 3, color: '#a78bfa' },
+      ],
+    },
+    objects: (() => {
+      const world = { w: 2200, h: 1500 }, spawn = [{ x: 1100, y: 750 }];
+      return [
+        ...cluster(1100, 750, 8, 1, 110, 1001),
+        ...cluster(600, 450, 7, 2, 100, 1002),
+        ...cluster(1600, 1050, 7, 3, 100, 1003),
+        ...cluster(1100, 300, 6, 4, 100, 1004), // grow to tier 4
+        // targets: 3 gold stars + 3 violet hexagons (both tier 4 — need to be big)
+        ...mark(cluster(500, 1120, 3, 4, 130, 1005), 'star', '#fbbf24'),
+        ...mark(cluster(1720, 470, 3, 4, 130, 1006), 'hexagon', '#a78bfa'),
+        ...scatter(world, 44, 4, 1007, spawn, 150),
       ];
     })(),
   },
