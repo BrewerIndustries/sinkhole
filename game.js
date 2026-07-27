@@ -319,6 +319,7 @@
       : state.goalsEaten >= state.goalsTotal;
     if (won) {
       state.status = 'win';
+      if (window.Arcade) { Arcade.report('level', levelIndex + 1); Arcade.report('gold', state.goalsEaten||0); }
       const more = levelIndex + 1 < LEVELS.length;
       showOverlay('Level Complete', more ? 'Nice hunting.' : 'You cleared them all.',
         more ? 'Next Level' : 'Play Again',
