@@ -66,6 +66,19 @@ function scatter(world, count, tier, seed, avoid, keepOut) {
   return out;
 }
 
+// give objects a shape + color (for shape-collect objectives). Non-marked objects
+// stay plain circles / tier colors.
+function mark(objs, shape, color) { return objs.map((o) => ({ ...o, shape, color })); }
+
+// wrap objects so they wander (constant drift, bounce off edges/walls)
+function moving(objs, speed) { return objs.map((o) => ({ ...o, move: true, speed: speed || 1.2 })); }
+
+// wrap objects so they FLEE once the hole is big enough to eat them (dart away
+// within `detect` px). Corner them against walls/edges to catch them.
+function fleeing(objs, speed, detect) {
+  return objs.map((o) => ({ ...o, move: true, flee: true, speed: speed || 2.8, detect: detect || 210 }));
+}
+
 const LEVELS = [
   // 1 — SANDBOX: an open test field. Generous food of every tier, a few golds,
   // no puzzle. Kept for trying out feel/tuning.
@@ -184,6 +197,138 @@ const LEVELS = [
         goal(280, 850), goal(2340, 850),
         ...scatter(world, 80, 4, 506, spawn, 130),
         ...scatter(world, 20, 3, 507, spawn, 130),
+      ];
+    })(),
+  },
+
+  // 6 — LIVE BAIT: the edible prey WANDER around the field while the big clutter
+  // sits still. You can't just park on a pocket — you have to chase the drifting
+  // food. Intro to moving prey.
+  {
+    name: 'Live Bait',
+    hint: 'The little ones drift around. Chase them down — a moving hole catches moving food.',
+    world: { w: 1900, h: 1300 },
+    player: { x: 950, y: 650, r: 12 },
+    objects: (() => {
+      const world = { w: 1900, h: 1300 }, spawn = [{ x: 950, y: 650 }];
+      return [
+        ...moving(cluster(950, 650, 12, 1, 160, 601), 1.4),
+        ...moving(cluster(450, 400, 9, 2, 130, 602), 1.1),
+        ...moving(cluster(1450, 900, 9, 2, 130, 603), 1.1),
+        ...moving(cluster(500, 980, 7, 3, 120, 604), 0.9),
+        ...moving(cluster(1420, 380, 7, 3, 120, 605), 0.9),
+        ...cluster(950, 300, 5, 4, 90, 606), // static tier-4 ramp to the golds
+        goal(150, 650), goal(1750, 650),
+        ...scatter(world, 22, 4, 607, spawn, 140),
+      ];
+    })(),
+  },
+
+  // 7 — SPOOKED: prey FLEE the moment you're big enough to eat them. In the open
+  // they outrun a straight chase — herd them into the wall pockets and corner
+  // them. Approach while you're still too small and they ignore you.
+  {
+    name: 'Spooked',
+    hint: 'Prey bolt once you can eat them. Corner them against the walls — or ambush while small.',
+    world: { w: 2000, h: 1300 },
+    player: { x: 1000, y: 650, r: 12 },
+    walls: [
+      // two L-shaped pens to trap fleeing prey
+      { x: 560, y: 300, w: 30, h: 260 }, { x: 560, y: 300, w: 240, h: 30 },
+      { x: 1410, y: 740, w: 30, h: 260 }, { x: 1200, y: 970, w: 240, h: 30 },
+    ],
+    objects: (() => {
+      const world = { w: 2000, h: 1300 }, spawn = [{ x: 1000, y: 650 }];
+      return [
+        ...fleeing(cluster(1000, 650, 10, 1, 150, 701), 2.6, 200),
+        ...fleeing(cluster(520, 430, 8, 2, 140, 702), 3.0, 200),
+        ...fleeing(cluster(1480, 880, 8, 2, 140, 703), 3.0, 200),
+        ...fleeing(cluster(520, 950, 6, 3, 120, 704), 2.6, 190),
+        ...fleeing(cluster(1480, 400, 6, 3, 120, 705), 2.6, 190),
+        ...cluster(1000, 300, 5, 4, 90, 706), // static tier-4 ramp
+        goal(200, 650), goal(1800, 650),
+        ...scatter(world, 16, 4, 707, spawn, 140),
+      ];
+    })(),
+  },
+
+  // 8 — FEEDING FRENZY: the big combined hunt. A wide field mixing wandering prey,
+  // static pockets, and heavy clutter, with golds in three far corners. Read the
+  // whole board, keep moving, don't starve mid-crossing.
+  {
+    name: 'Feeding Frenzy',
+    hint: 'Everything at once: wanderers, pockets, clutter, three golds. Keep the hunt moving.',
+    world: { w: 2400, h: 1600 },
+    player: { x: 1200, y: 800, r: 12 },
+    objects: (() => {
+      const world = { w: 2400, h: 1600 }, spawn = [{ x: 1200, y: 800 }];
+      return [
+        ...moving(cluster(1200, 800, 10, 1, 150, 801), 1.3),
+        ...moving(scatter(world, 14, 1, 802, spawn, 150), 1.2),
+        ...moving(cluster(500, 400, 8, 2, 130, 803), 1.0),
+        ...moving(cluster(1900, 1200, 8, 2, 130, 804), 1.0),
+        ...cluster(500, 1200, 7, 3, 120, 805),
+        ...cluster(1900, 400, 7, 3, 120, 806),
+        ...cluster(1200, 300, 5, 4, 100, 807),
+        goal(150, 800), goal(2250, 800), goal(1200, 1480),
+        ...scatter(world, 58, 4, 808, spawn, 150),
+        ...scatter(world, 20, 3, 809, spawn, 150),
+      ];
+    })(),
+  },
+
+  // 9 — COLLECTOR: the new objective type. Instead of gold orbs, the goal is to
+  // collect a set number of specific SHAPES (▲ and ■). Grow on the circles, then
+  // hunt down the shapes among the clutter.
+  {
+    name: 'Collector',
+    hint: 'New goal: collect the shapes. Grow on the circles, then hunt the ▲ and ■.',
+    world: { w: 2000, h: 1400 },
+    player: { x: 1000, y: 700, r: 12 },
+    objective: {
+      collect: [
+        { shape: 'triangle', count: 5, color: '#f472b6' },
+        { shape: 'square', count: 4, color: '#38bdf8' },
+      ],
+    },
+    objects: (() => {
+      const world = { w: 2000, h: 1400 }, spawn = [{ x: 1000, y: 700 }];
+      return [
+        ...cluster(1000, 700, 10, 1, 120, 901), // grow to tier 2
+        ...cluster(520, 430, 8, 2, 110, 902),   // grow to tier 3
+        ...cluster(1500, 1000, 7, 3, 110, 903), // top-up
+        // targets: 5 pink triangles (tier 2) + 4 blue squares (tier 3)
+        ...mark(cluster(430, 1050, 5, 2, 150, 904), 'triangle', '#f472b6'),
+        ...mark(cluster(1600, 400, 4, 3, 140, 905), 'square', '#38bdf8'),
+        ...scatter(world, 26, 4, 906, spawn, 140), // clutter
+      ];
+    })(),
+  },
+
+  // 10 — BIG GAME: a shape hunt that needs you fully grown. Bag the big ★ and ⬢,
+  // which only become edible once you've climbed the whole food chain.
+  {
+    name: 'Big Game',
+    hint: 'Grow all the way up the circles, then bag the big shapes: ★ and ⬢.',
+    world: { w: 2200, h: 1500 },
+    player: { x: 1100, y: 750, r: 12 },
+    objective: {
+      collect: [
+        { shape: 'star', count: 3, color: '#fbbf24' },
+        { shape: 'hexagon', count: 3, color: '#a78bfa' },
+      ],
+    },
+    objects: (() => {
+      const world = { w: 2200, h: 1500 }, spawn = [{ x: 1100, y: 750 }];
+      return [
+        ...cluster(1100, 750, 8, 1, 110, 1001),
+        ...cluster(600, 450, 7, 2, 100, 1002),
+        ...cluster(1600, 1050, 7, 3, 100, 1003),
+        ...cluster(1100, 300, 6, 4, 100, 1004), // grow to tier 4
+        // targets: 3 gold stars + 3 violet hexagons (both tier 4 — need to be big)
+        ...mark(cluster(500, 1120, 3, 4, 130, 1005), 'star', '#fbbf24'),
+        ...mark(cluster(1720, 470, 3, 4, 130, 1006), 'hexagon', '#a78bfa'),
+        ...scatter(world, 44, 4, 1007, spawn, 150),
       ];
     })(),
   },

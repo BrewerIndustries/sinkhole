@@ -19,15 +19,26 @@
     4: '#fca5a5', // red
     5: '#fcd34d', // gold (goal)
   };
+  // glyphs for shape-collect objectives (HUD)
+  const SHAPE_GLYPH = {
+    circle: '●', triangle: '▲', square: '■', diamond: '◆',
+    star: '★', pentagon: '⬟', hexagon: '⬢',
+  };
 
-  // movement tuning
-  const ACCEL = 0.62;
-  const FRICTION = 0.86;
+  // movement tuning (gentler = less jerky)
+  const FRICTION = 0.89;    // higher = more glide, softer direction changes
+  const APPARENT_SPEED = 1.8; // base ON-SCREEN speed for the smallest hole
+  const SIZE_POW = 0.27;    // how strongly apparent speed grows with radius (0 = flat)
+  const SIZE_MAX = 2.1;     // cap on the size boost (biggest hole ≈ this× the base)
+  const WORLD_CAP = 16;     // hard cap on world px/frame (protects huge/zoomed-out)
+  const ACCEL_RESP = 2.0;   // how hard the hole accelerates toward its top speed (capped)
   const GROWTH = 0.5;       // fraction of an eaten object's area added to yours
   const EAT_TOL = 0.9;      // must be this fraction as big to swallow (r >= obj.r*TOL)
-  // camera / zoom
+  // camera / zoom (eased on both position and zoom so the view glides)
   const ZOOM_K = 17;        // zoom = ZOOM_K / radius, clamped
   const ZOOM_MAX = 1.5;     // most zoomed-in (tiny hole)
+  const ZOOM_SMOOTH = 0.045; // per-frame easing of zoom toward target (slower)
+  const CAM_SMOOTH = 0.10;  // per-frame easing of camera center toward the hole
 
   const canvas = document.getElementById('game');
   const ctx = canvas.getContext('2d');
@@ -64,12 +75,20 @@
     return Math.max(VW / world.w, VH / world.h);
   }
 
-  function computeCamera() {
+  function computeCamera(snap) {
     const p = state.p, world = state.world;
-    const zoom = clamp(ZOOM_K / p.r, fitZoom(world), ZOOM_MAX);
+    const target = clamp(ZOOM_K / p.r, fitZoom(world), ZOOM_MAX);
+    const prev = state.cam ? state.cam.zoom : target;
+    // ease zoom toward target so a growth pop doesn't snap the whole view
+    const zoom = snap ? target : prev + (target - prev) * ZOOM_SMOOTH;
     const halfW = (VW / 2) / zoom, halfH = (VH / 2) / zoom;
-    const x = world.w <= 2 * halfW ? world.w / 2 : clamp(p.x, halfW, world.w - halfW);
-    const y = world.h <= 2 * halfH ? world.h / 2 : clamp(p.y, halfH, world.h - halfH);
+    const tx = world.w <= 2 * halfW ? world.w / 2 : clamp(p.x, halfW, world.w - halfW);
+    const ty = world.h <= 2 * halfH ? world.h / 2 : clamp(p.y, halfH, world.h - halfH);
+    // ease the camera center toward the hole instead of snapping to it
+    const px = state.cam ? state.cam.x : tx;
+    const py = state.cam ? state.cam.y : ty;
+    const x = snap ? tx : px + (tx - px) * CAM_SMOOTH;
+    const y = snap ? ty : py + (ty - py) * CAM_SMOOTH;
     state.cam = { x, y, zoom };
   }
 
@@ -77,10 +96,21 @@
     const def = LEVELS[i];
     levelIndex = i;
     const world = def.world || { w: VW, h: VH };
-    const objects = def.objects.map((o, idx) => ({
-      x: o.x, y: o.y, r: o.r, tier: o.tier, id: idx,
-      dying: false, dieT: 0, sx: o.x, sy: o.y, sr: o.r,
-    }));
+    const objects = def.objects.map((o, idx) => {
+      const obj = {
+        x: o.x, y: o.y, r: o.r, tier: o.tier, id: idx,
+        shape: o.shape || 'circle', color: o.color || null,
+        dying: false, dieT: 0, sx: o.x, sy: o.y, sr: o.r,
+        move: !!o.move, flee: !!o.flee, speed: o.speed || 1.2, detect: o.detect || 200,
+        vx: 0, vy: 0,
+      };
+      if (obj.move) {
+        const a = Math.random() * Math.PI * 2;
+        const s = obj.flee ? 0 : obj.speed; // fleers start still, dart when threatened
+        obj.vx = Math.cos(a) * s; obj.vy = Math.sin(a) * s;
+      }
+      return obj;
+    });
     state = {
       def, world,
       p: { x: def.player.x, y: def.player.y, r: def.player.r, vx: 0, vy: 0 },
@@ -89,19 +119,29 @@
       objects,
       goalsTotal: objects.filter((o) => o.tier === 5).length,
       goalsEaten: 0,
+      // shape-collect objective (null = classic "eat all the gold orbs")
+      collect: def.objective && def.objective.collect
+        ? def.objective.collect.map((c) => ({ ...c, got: 0 }))
+        : null,
       status: 'play', // play | win | stuck
       pop: [],
       tick: 0,
       cam: { x: def.player.x, y: def.player.y, zoom: 1 },
     };
-    computeCamera();
+    computeCamera(true); // snap to correct zoom on level start
     updateHud();
     hideOverlay();
   }
 
   function updateHud() {
     hudLevel.textContent = `${levelIndex + 1}. ${state.def.name}`;
-    hudGoals.textContent = `Gold ${state.goalsEaten}/${state.goalsTotal}`;
+    if (state.collect) {
+      hudGoals.innerHTML = state.collect.map((c) =>
+        `<b style="color:${c.color || '#fcd34d'}">${SHAPE_GLYPH[c.shape] || '●'} ${c.got}/${c.count}</b>`
+      ).join(' &nbsp; ');
+    } else {
+      hudGoals.innerHTML = `🟡 <b>Gold ${state.goalsEaten}/${state.goalsTotal}</b>`;
+    }
     hudSize.textContent = `Tier ${tierOfRadius(state.p.r)}`;
     hudHint.textContent = state.def.hint;
   }
@@ -126,7 +166,16 @@
     e.preventDefault(); const p = screenPos(e); pointer.x = p.x; pointer.y = p.y; pointer.active = true;
   }, { passive: false });
   canvas.addEventListener('touchend', () => { pointer.active = false; });
-  window.addEventListener('keydown', (e) => keys.add(e.key.toLowerCase()));
+  window.addEventListener('keydown', (e) => {
+    const k = e.key.toLowerCase();
+    // Enter / Space activates the overlay button (Next Level / Retry) when prompted
+    if ((k === 'enter' || k === ' ' || k === 'spacebar') && overlay.classList.contains('show')) {
+      e.preventDefault();
+      overlayBtn.click();
+      return;
+    }
+    keys.add(k);
+  });
   window.addEventListener('keyup', (e) => keys.delete(e.key.toLowerCase()));
 
   // ---- geometry helpers ----
@@ -155,6 +204,18 @@
     return true;
   }
 
+  // moving prey vs wall: push out and reflect velocity (so fleers can be cornered)
+  function bounceRect(o, rect) {
+    const nx = clamp(o.x, rect.x, rect.x + rect.w);
+    const ny = clamp(o.y, rect.y, rect.y + rect.h);
+    const dx = o.x - nx, dy = o.y - ny, d2 = dx * dx + dy * dy;
+    if (d2 >= o.r * o.r || d2 < 0.0001) return;
+    const d = Math.sqrt(d2), nX = dx / d, nY = dy / d;
+    o.x += nX * (o.r - d); o.y += nY * (o.r - d);
+    const vn = o.vx * nX + o.vy * nY;
+    if (vn < 0) { o.vx -= 2 * vn * nX; o.vy -= 2 * vn * nY; }
+  }
+
   function gateSide(g, x, y) {
     if (g.axis === 'v') return x < g.x + g.w / 2 ? -1 : 1;
     return y < g.y + g.h / 2 ? -1 : 1;
@@ -167,22 +228,27 @@
     const p = state.p, world = state.world, cam = state.cam;
 
     // steer toward pointer, mapped from screen space through the camera
+    // Apparent (on-screen) speed grows with size so a big hole feels powerful, not
+    // sluggish; world speed then compensates for the camera zoom-out.
+    const sizeBoost = clamp(Math.pow(p.r / 12, SIZE_POW), 1, SIZE_MAX);
+    const spd = Math.min(APPARENT_SPEED * sizeBoost / cam.zoom, WORLD_CAP);
+    const accel = spd * (1 - FRICTION) * ACCEL_RESP;
+
     if (pointer.active) {
       const wx = (pointer.x - VW / 2) / cam.zoom + cam.x;
       const wy = (pointer.y - VH / 2) / cam.zoom + cam.y;
       const dx = wx - p.x, dy = wy - p.y;
       const d = Math.hypot(dx, dy);
-      if (d > 3) { p.vx += (dx / d) * ACCEL; p.vy += (dy / d) * ACCEL; }
+      if (d > 3) { p.vx += (dx / d) * accel; p.vy += (dy / d) * accel; }
     }
-    if (keys.has('arrowleft') || keys.has('a')) p.vx -= ACCEL;
-    if (keys.has('arrowright') || keys.has('d')) p.vx += ACCEL;
-    if (keys.has('arrowup') || keys.has('w')) p.vy -= ACCEL;
-    if (keys.has('arrowdown') || keys.has('s')) p.vy += ACCEL;
+    if (keys.has('arrowleft') || keys.has('a')) p.vx -= accel;
+    if (keys.has('arrowright') || keys.has('d')) p.vx += accel;
+    if (keys.has('arrowup') || keys.has('w')) p.vy -= accel;
+    if (keys.has('arrowdown') || keys.has('s')) p.vy += accel;
 
     p.vx *= FRICTION; p.vy *= FRICTION;
-    const maxSpeed = 5.4 * (1 - Math.min(0.42, (p.r - 12) / 260));
     const sp = Math.hypot(p.vx, p.vy);
-    if (sp > maxSpeed) { p.vx *= maxSpeed / sp; p.vy *= maxSpeed / sp; }
+    if (sp > spd) { p.vx *= spd / sp; p.vy *= spd / sp; }
     p.x += p.vx; p.y += p.vy;
 
     // one-way gate sealing
@@ -198,6 +264,22 @@
     p.x = clamp(p.x, p.r, world.w - p.r);
     p.y = clamp(p.y, p.r, world.h - p.r);
 
+    // moving prey: wander, or flee once the hole is big enough to eat them
+    for (const o of state.objects) {
+      if (!o.move || o.dying) continue;
+      if (o.flee) {
+        const dx = o.x - p.x, dy = o.y - p.y, d = Math.hypot(dx, dy) || 1;
+        if (d < o.detect && p.r >= o.r * EAT_TOL) { o.vx = (dx / d) * o.speed; o.vy = (dy / d) * o.speed; }
+        else { o.vx *= 0.96; o.vy *= 0.96; }
+      }
+      o.x += o.vx; o.y += o.vy;
+      if (o.x < o.r) { o.x = o.r; o.vx = Math.abs(o.vx); }
+      else if (o.x > world.w - o.r) { o.x = world.w - o.r; o.vx = -Math.abs(o.vx); }
+      if (o.y < o.r) { o.y = o.r; o.vy = Math.abs(o.vy); }
+      else if (o.y > world.h - o.r) { o.y = world.h - o.r; o.vy = -Math.abs(o.vy); }
+      for (const wall of state.walls) bounceRect(o, wall);
+    }
+
     // eating
     for (const o of state.objects) {
       if (o.dying) continue;
@@ -208,7 +290,11 @@
         const area = Math.PI * o.r * o.r;
         p.r = Math.sqrt((Math.PI * p.r * p.r + area * GROWTH) / Math.PI);
         if (o.tier === 5) state.goalsEaten++;
-        state.pop.push({ x: o.x, y: o.y, r: o.r, t: 0, tier: o.tier });
+        if (state.collect && o.shape && o.shape !== 'circle') {
+          const t = state.collect.find((c) => c.shape === o.shape);
+          if (t && t.got < t.count) t.got++;
+        }
+        state.pop.push({ x: o.x, y: o.y, r: o.r, t: 0, color: o.color || TIER_COLOR[o.tier] });
         updateHud();
       }
     }
@@ -228,8 +314,12 @@
     computeCamera();
 
     // win / stuck
-    if (state.goalsEaten >= state.goalsTotal) {
+    const won = state.collect
+      ? state.collect.every((c) => c.got >= c.count)
+      : state.goalsEaten >= state.goalsTotal;
+    if (won) {
       state.status = 'win';
+      if (window.Arcade) { Arcade.report('level', levelIndex + 1); Arcade.report('gold', state.goalsEaten||0); }
       const more = levelIndex + 1 < LEVELS.length;
       showOverlay('Level Complete', more ? 'Nice hunting.' : 'You cleared them all.',
         more ? 'Next Level' : 'Play Again',
@@ -279,13 +369,13 @@
 
     for (const o of state.objects) {
       const edible = state.p.r >= o.r * EAT_TOL && !o.dying;
-      drawBlob(o.x, o.y, o.r, o.tier, edible, cam.zoom);
+      drawObject(o, edible, cam.zoom);
     }
 
     for (const f of state.pop) {
       const k = f.t / 0.35;
       ctx.globalAlpha = 1 - k;
-      ctx.strokeStyle = TIER_COLOR[f.tier];
+      ctx.strokeStyle = f.color || '#fff';
       ctx.lineWidth = 2 / cam.zoom;
       ctx.beginPath(); ctx.arc(f.x, f.y, f.r + k * 22, 0, Math.PI * 2); ctx.stroke();
       ctx.globalAlpha = 1;
@@ -305,19 +395,50 @@
     drawMinimap();
   }
 
-  function drawBlob(x, y, r, tier, edible, zoom) {
+  function shapePath(shape, x, y, r) {
+    ctx.beginPath();
+    switch (shape) {
+      case 'square': { const s = r * 0.86; ctx.rect(x - s, y - s, 2 * s, 2 * s); break; }
+      case 'triangle': polyPath(x, y, r * 1.1, 3, -Math.PI / 2); break;
+      case 'diamond': polyPath(x, y, r, 4, -Math.PI / 2); break;
+      case 'pentagon': polyPath(x, y, r, 5, -Math.PI / 2); break;
+      case 'hexagon': polyPath(x, y, r, 6, -Math.PI / 2); break;
+      case 'star': starPath(x, y, r, r * 0.45, 5, -Math.PI / 2); break;
+      default: ctx.arc(x, y, r, 0, Math.PI * 2); // circle
+    }
+  }
+  function polyPath(x, y, r, n, rot) {
+    for (let i = 0; i < n; i++) {
+      const a = rot + i * 2 * Math.PI / n, px = x + Math.cos(a) * r, py = y + Math.sin(a) * r;
+      i ? ctx.lineTo(px, py) : ctx.moveTo(px, py);
+    }
+    ctx.closePath();
+  }
+  function starPath(x, y, R, r, n, rot) {
+    for (let i = 0; i < 2 * n; i++) {
+      const a = rot + i * Math.PI / n, rr = i % 2 ? r : R;
+      const px = x + Math.cos(a) * rr, py = y + Math.sin(a) * rr;
+      i ? ctx.lineTo(px, py) : ctx.moveTo(px, py);
+    }
+    ctx.closePath();
+  }
+
+  function drawObject(o, edible, zoom) {
+    const color = o.color || TIER_COLOR[o.tier];
+    const isTarget = o.tier === 5 || (o.shape && o.shape !== 'circle');
     ctx.save();
-    if (tier === 5) { ctx.shadowColor = '#fcd34d'; ctx.shadowBlur = 16; }
-    ctx.fillStyle = TIER_COLOR[tier];
+    if (isTarget) { ctx.shadowColor = color; ctx.shadowBlur = 14; }
+    ctx.fillStyle = color;
     ctx.globalAlpha = edible ? 1 : 0.5;
-    ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI * 2); ctx.fill();
+    shapePath(o.shape || 'circle', o.x, o.y, o.r);
+    ctx.fill();
     ctx.restore();
     if (edible) {
-      // pulsing ring so edible prey pops out of a dense field
-      const pulse = 1 + 0.18 * Math.sin(state.tick * 0.15 + x * 0.05);
+      // pulsing ring so edible prey/targets pop out of a dense field
+      const pulse = 1 + 0.18 * Math.sin(state.tick * 0.15 + o.x * 0.05);
       ctx.strokeStyle = 'rgba(255,255,255,0.9)';
       ctx.lineWidth = 1.6 / zoom;
-      ctx.beginPath(); ctx.arc(x, y, r + 2 + pulse, 0, Math.PI * 2); ctx.stroke();
+      ctx.beginPath(); ctx.arc(o.x, o.y, o.r + 2 + pulse, 0, Math.PI * 2); ctx.stroke();
     }
   }
 
@@ -330,10 +451,12 @@
     ctx.fillStyle = '#0b0e16'; roundRect(ox, oy, mw, mh, 6); ctx.fill();
     ctx.strokeStyle = 'rgba(140,170,255,0.35)'; ctx.lineWidth = 1; ctx.stroke();
     const sx = mw / world.w, sy = mh / world.h;
-    // goals
+    // objective markers: gold orbs, or the collect-target shapes
+    const targetShapes = state.collect ? state.collect.map((c) => c.shape) : null;
     for (const o of state.objects) {
-      if (o.tier !== 5) continue;
-      ctx.fillStyle = '#fcd34d';
+      const isTarget = targetShapes ? targetShapes.includes(o.shape) : o.tier === 5;
+      if (!isTarget) continue;
+      ctx.fillStyle = o.color || '#fcd34d';
       ctx.beginPath(); ctx.arc(ox + o.x * sx, oy + o.y * sy, 3, 0, Math.PI * 2); ctx.fill();
     }
     // hole
@@ -391,5 +514,5 @@
   requestAnimationFrame(frame);
 
   // debug hook (headless testing only; harmless in normal play)
-  window.__dbg = { get state() { return state; }, step, loadLevel };
+  window.__dbg = { get state() { return state; }, step, loadLevel, draw };
 })();
